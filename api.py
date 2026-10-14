@@ -1,21 +1,20 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 import pandas as pd
 import json
 import os
 
 import config
-from model import load_models, train_and_save_all_models
+from model import train_and_save_model
 from predict import predict_single_student, predict_batch_students
 from recommend import generate_recommendations
 from evaluate import evaluate_all_models
-from data_loader import load_data, load_cmrit_data
 
 app = FastAPI(
     title="Student Placement Prediction & Readiness API",
-    description="Machine Learning API for student placement propensity scoring, model benchmarking, and personalized career recommendations.",
+    description="Machine Learning API for student placement propensity scoring and personalized career recommendations powered by Logistic Regression.",
     version="1.0.0"
 )
 
@@ -37,17 +36,15 @@ class StudentProfile(BaseModel):
     projects: int = Field(0, ge=0, description="Number of projects built")
     certifications: int = Field(0, ge=0, description="Number of certifications earned")
     backlogs: int = Field(0, ge=0, description="Number of active academic backlogs")
-    model_name: Optional[str] = "Random Forest"
 
 class BatchStudentRequest(BaseModel):
     students: List[StudentProfile]
-    model_name: Optional[str] = "Random Forest"
 
 @app.on_event("startup")
 def startup_event():
-    """Ensure models are trained and saved upon API launch."""
-    if not (os.path.exists(config.RF_MODEL_PATH) and os.path.exists(config.METRICS_PATH)):
-        train_and_save_all_models()
+    """Ensure model is trained and saved upon API launch."""
+    if not (os.path.exists(config.MODEL_PATH) and os.path.exists(config.METRICS_PATH)):
+        train_and_save_model()
         evaluate_all_models()
 
 @app.get("/")
@@ -55,22 +52,20 @@ def read_root():
     return {
         "status": "online",
         "system": "Student Placement Prediction System",
+        "model": "Logistic Regression",
         "documentation": "/docs"
     }
 
 @app.get("/metrics")
 def get_metrics():
-    """Returns comparative classification metrics for all models."""
+    """Returns classification evaluation metrics for Logistic Regression."""
     if not os.path.exists(config.METRICS_PATH):
         evaluate_all_models()
     with open(config.METRICS_PATH, "r") as f:
         metrics = json.load(f)
-    with open(config.FEATURE_IMPORTANCE_PATH, "r") as f:
-        feat_imp = json.load(f)
     return {
-        "models_comparison": metrics,
-        "feature_importances": feat_imp,
-        "best_model": "Random Forest (F1: 0.876, Recall: 0.896)"
+        "evaluation_metrics": metrics,
+        "model": "Logistic Regression"
     }
 
 @app.get("/benchmarks")
@@ -80,11 +75,10 @@ def get_benchmarks():
 
 @app.post("/predict")
 def predict_placement(profile: StudentProfile):
-    """Predicts placement likelihood and classification for a student."""
+    """Predicts placement likelihood and classification for a student using Logistic Regression."""
     try:
         data_dict = profile.model_dump()
-        model_name = data_dict.pop("model_name", "Random Forest")
-        result = predict_single_student(data_dict, model_name=model_name)
+        result = predict_single_student(data_dict)
         result["student_id"] = profile.student_id
         return result
     except Exception as e:
@@ -95,8 +89,7 @@ def recommend_improvements(profile: StudentProfile):
     """Generates personalized, prioritized recommendations and skill gap analysis."""
     try:
         data_dict = profile.model_dump()
-        recs = generate_recommendations(data_dict)
-        return recs
+        return generate_recommendations(data_dict)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -105,8 +98,7 @@ def analyze_student(profile: StudentProfile):
     """Performs full end-to-end analysis: prediction + probability + personalized recommendations."""
     try:
         data_dict = profile.model_dump()
-        model_name = data_dict.pop("model_name", "Random Forest")
-        pred_res = predict_single_student(data_dict, model_name=model_name)
+        pred_res = predict_single_student(data_dict)
         rec_res = generate_recommendations(data_dict)
         return {
             "student_id": profile.student_id,
@@ -118,11 +110,11 @@ def analyze_student(profile: StudentProfile):
 
 @app.post("/batch-predict")
 def batch_predict(batch: BatchStudentRequest):
-    """Performs batch prediction over a list of student records."""
+    """Performs batch prediction over a list of student records using Logistic Regression."""
     try:
         records = [s.model_dump() for s in batch.students]
         df = pd.DataFrame(records)
-        res_df = predict_batch_students(df, model_name=batch.model_name or "Random Forest")
+        res_df = predict_batch_students(df)
         return {
             "total_students": len(res_df),
             "placed_count": int((res_df["Predicted_Status"] == "Placed").sum()),

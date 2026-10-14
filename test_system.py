@@ -20,10 +20,11 @@ class TestPlacementSystem(unittest.TestCase):
         }
 
     def test_predict_single_student(self):
-        result = predict_single_student(self.sample_student, model_name="Random Forest")
+        result = predict_single_student(self.sample_student)
         self.assertIn("prediction", result)
         self.assertIn("placement_probability", result)
         self.assertIn("readiness_band", result)
+        self.assertEqual(result["model_used"], "Logistic Regression")
         self.assertEqual(result["prediction"], "Placed")
         self.assertGreaterEqual(result["placement_probability"], 50.0)
 
@@ -51,12 +52,14 @@ class TestPlacementSystem(unittest.TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "online")
+        self.assertEqual(response.json()["model"], "Logistic Regression")
 
     def test_api_predict(self):
         response = self.client.post("/predict", json=self.sample_student)
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["prediction"], "Placed")
+        self.assertEqual(data["model_used"], "Logistic Regression")
 
     def test_api_recommend(self):
         response = self.client.post("/recommend", json=self.sample_student)
@@ -68,8 +71,8 @@ class TestPlacementSystem(unittest.TestCase):
         response = self.client.get("/metrics")
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertIn("models_comparison", data)
-        self.assertIn("feature_importances", data)
+        self.assertIn("evaluation_metrics", data)
+        self.assertEqual(data["model"], "Logistic Regression")
 
 if __name__ == "__main__":
     unittest.main()

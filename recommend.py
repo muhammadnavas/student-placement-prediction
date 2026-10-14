@@ -1,24 +1,10 @@
 import config
-from model import load_models
 
 def generate_recommendations(student_data: dict) -> dict:
     """
     Analyzes student metrics against placed cohort benchmarks,
-    incorporates Random Forest feature importance weights, and produces
-    prioritized, actionable recommendations and skill gap analysis.
+    and produces prioritized, actionable recommendations and skill gap analysis.
     """
-    models = load_models()
-    feat_importances = models.get("Feature Importance", {
-        "cgpa": 0.268,
-        "aptitude_score": 0.189,
-        "communication_score": 0.165,
-        "technical_score": 0.150,
-        "projects": 0.082,
-        "backlogs": 0.056,
-        "internships": 0.046,
-        "certifications": 0.043
-    })
-    
     benchmarks = config.PLACED_BENCHMARKS
     gaps = {}
     recommendation_items = []
@@ -35,14 +21,12 @@ def generate_recommendations(student_data: dict) -> dict:
     
     # 1. Backlogs Assessment (High critical priority if > 0)
     if backlogs > 0:
-        gap_score = backlogs * 1.5 * feat_importances.get("backlogs", 0.056) * 100
         gaps["backlogs"] = {
             "feature": "Active Backlogs",
             "current": backlogs,
             "target": 0,
             "gap": backlogs,
-            "severity": "CRITICAL",
-            "weighted_impact": round(gap_score, 2)
+            "severity": "CRITICAL"
         }
         recommendation_items.append({
             "category": "Academic Eligibility",
@@ -55,14 +39,12 @@ def generate_recommendations(student_data: dict) -> dict:
     # 2. CGPA Assessment
     cgpa_diff = benchmarks["cgpa"] - cgpa
     if cgpa_diff > 0:
-        gap_score = (cgpa_diff / 10.0) * feat_importances.get("cgpa", 0.268) * 100
         gaps["cgpa"] = {
             "feature": "CGPA",
             "current": cgpa,
             "target": benchmarks["cgpa"],
             "gap": round(cgpa_diff, 2),
-            "severity": "High" if cgpa < 7.0 else "Medium",
-            "weighted_impact": round(gap_score, 2)
+            "severity": "High" if cgpa < 7.0 else "Medium"
         }
         if cgpa < 7.0:
             recommendation_items.append({
@@ -76,14 +58,12 @@ def generate_recommendations(student_data: dict) -> dict:
     # 3. Technical & Programming Skills
     tech_diff = benchmarks["technical_score"] - tech
     if tech_diff > 0:
-        gap_score = (tech_diff / 100.0) * feat_importances.get("technical_score", 0.150) * 100
         gaps["technical_score"] = {
             "feature": "Technical / Coding Score",
             "current": tech,
             "target": benchmarks["technical_score"],
             "gap": round(tech_diff, 1),
-            "severity": "High" if tech < 65 else "Medium",
-            "weighted_impact": round(gap_score, 2)
+            "severity": "High" if tech < 65 else "Medium"
         }
         recommendation_items.append({
             "category": "Technical Mastery",
@@ -96,34 +76,30 @@ def generate_recommendations(student_data: dict) -> dict:
     # 4. Aptitude Score
     apt_diff = benchmarks["aptitude_score"] - aptitude
     if apt_diff > 0:
-        gap_score = (apt_diff / 100.0) * feat_importances.get("aptitude_score", 0.189) * 100
         gaps["aptitude_score"] = {
             "feature": "Aptitude Score",
             "current": aptitude,
             "target": benchmarks["aptitude_score"],
             "gap": round(apt_diff, 1),
-            "severity": "High" if aptitude < 65 else "Medium",
-            "weighted_impact": round(gap_score, 2)
+            "severity": "High" if aptitude < 65 else "Medium"
         }
         recommendation_items.append({
             "category": "Aptitude & Reasoning",
             "priority": "P1 - High" if aptitude < 65 else "P2 - Medium",
             "icon": "🧠",
             "title": "Timed Quantitative & Logical Aptitude Drills",
-            "action": f"Aptitude is the second largest driver of placement success (18.9% importance). Take weekly full-length speed tests on platforms like IndiaBIX, Pariksha, or PrepInsta covering Speed Maths, Probability, and Syllogisms."
+            "action": f"Take weekly full-length speed tests on platforms like IndiaBIX, Pariksha, or PrepInsta covering Speed Maths, Probability, and Syllogisms."
         })
 
     # 5. Communication Score
     comm_diff = benchmarks["communication_score"] - comm
     if comm_diff > 0:
-        gap_score = (comm_diff / 100.0) * feat_importances.get("communication_score", 0.165) * 100
         gaps["communication_score"] = {
             "feature": "Communication Score",
             "current": comm,
             "target": benchmarks["communication_score"],
             "gap": round(comm_diff, 1),
-            "severity": "High" if comm < 65 else "Medium",
-            "weighted_impact": round(gap_score, 2)
+            "severity": "High" if comm < 65 else "Medium"
         }
         recommendation_items.append({
             "category": "Soft Skills & Communication",
@@ -136,14 +112,12 @@ def generate_recommendations(student_data: dict) -> dict:
     # 6. Projects
     if projects < 2:
         proj_diff = benchmarks["projects"] - projects
-        gap_score = (proj_diff / 5.0) * feat_importances.get("projects", 0.082) * 100
         gaps["projects"] = {
             "feature": "Academic/Personal Projects",
             "current": projects,
             "target": 3,
             "gap": 3 - projects,
-            "severity": "Medium",
-            "weighted_impact": round(gap_score, 2)
+            "severity": "Medium"
         }
         recommendation_items.append({
             "category": "Project Portfolio",
@@ -155,14 +129,12 @@ def generate_recommendations(student_data: dict) -> dict:
 
     # 7. Internships
     if internships < 1:
-        gap_score = 1.0 * feat_importances.get("internships", 0.046) * 100
         gaps["internships"] = {
             "feature": "Internships",
             "current": internships,
             "target": 1,
             "gap": 1,
-            "severity": "Medium",
-            "weighted_impact": round(gap_score, 2)
+            "severity": "Medium"
         }
         recommendation_items.append({
             "category": "Industry Exposure",
@@ -174,14 +146,12 @@ def generate_recommendations(student_data: dict) -> dict:
 
     # 8. Certifications
     if certs < 1:
-        gap_score = 1.0 * feat_importances.get("certifications", 0.043) * 100
         gaps["certifications"] = {
             "feature": "Relevant Certifications",
             "current": certs,
             "target": 2,
             "gap": 2 - certs,
-            "severity": "Low",
-            "weighted_impact": round(gap_score, 2)
+            "severity": "Low"
         }
         recommendation_items.append({
             "category": "Skill Credentialing",

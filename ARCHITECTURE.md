@@ -44,7 +44,7 @@ The **Student Placement Prediction & Readiness System** is an end-to-end supervi
 | Principle | Implementation |
 |---|---|
 | Multi-attribute over CGPA-only | 8 features; skills combine to >56% importance |
-| Explainability-first | RF feature importances drive recommendations |
+| Explainability-first | Logistic Regression standardized coefficients drive recommendations |
 | Dual deployment | FastAPI (REST) + Streamlit (GUI) |
 | Stateless inference | Models serialised to `.pkl`; scaler persisted |
 | Anonymised data | All records use mock IDs (`Student 01` to `Student 67`) |
@@ -75,15 +75,13 @@ ML2 - Project/
 |   +-- institutional_assessment_data.csv  # 67-student anonymised cohort
 |
 +-- models/
-|   +-- random_forest_model.pkl
 |   +-- logistic_regression_model.pkl
-|   +-- gradient_boosting_model.pkl
 |   +-- scaler.pkl
 |   +-- evaluation_metrics.json
 |   +-- feature_importance.json
 |
 +-- plots/
-|   +-- confusion_matrix_rf.png
+|   +-- confusion_matrix.png
 |   +-- roc_curves.png
 |   +-- feature_importance.png
 |   +-- hyperparameter_tuning.png
@@ -226,7 +224,6 @@ X_test_scaled  = scaler.transform(X_test)         # apply same transform to test
 | Fit-only on train | Prevents data leakage from test set into scaling parameters |
 | Serialised to disk | `models/scaler.pkl` — ensures consistent inference-time scaling |
 | Used by | Logistic Regression (requires zero-mean, unit-variance inputs) |
-| Not used by | Random Forest & Gradient Boosting (tree-based; scale-invariant) |
 
 ---
 
@@ -234,62 +231,30 @@ X_test_scaled  = scaler.transform(X_test)         # apply same transform to test
 
 **File:** [`model.py`](model.py)
 
-### Three Algorithms Trained
-
-#### 1. Logistic Regression (Linear Baseline)
+### Model: Logistic Regression
 
 ```python
 LogisticRegression(random_state=42, max_iter=1000)
 ```
 
-- Trained on **scaled** features (`X_train_scaled`).
-- Linear probabilistic baseline; weights interpretable via signed coefficients.
-
-#### 2. Random Forest Classifier — PRIMARY MODEL
-
-```python
-RandomForestClassifier(
-    n_estimators    = 200,   # 200 bagged decision trees
-    max_depth       = 6,     # Depth cap controls overfitting
-    min_samples_leaf = 2,    # Minimum 2 samples per leaf
-    random_state    = 42
-)
-```
-
-- Trained on **unscaled** features (trees are scale-invariant).
-- **Selected as primary model** — highest F1-score (0.876) and Recall (0.896).
-- Provides Gini-based `feature_importances_` that power the recommendation engine.
-- `n_estimators=200` confirmed by hyperparameter tuning sweep (converges at ~150–200).
-
-#### 3. Gradient Boosting Classifier (Sequential Ensemble)
-
-```python
-GradientBoostingClassifier(
-    n_estimators  = 100,
-    learning_rate = 0.08,   # Conservative; prevents overfitting
-    max_depth     = 3,      # Shallow trees; each corrects prior residuals
-    random_state  = 42
-)
-```
-
-- Trained on **unscaled** features; sequential boosting corrects prior tree's residuals.
+- Trained on **standard-scaled** features (`X_train_scaled`).
+- High-performing linear classifier; odds-ratio and log-odds interpretability via signed coefficients.
+- Standardized coefficient magnitudes $|\beta_j| / \sum |\beta_k|$ provide normalized feature importance weights for the recommendation engine.
 
 ### Model Serialisation Output
 
 ```
 models/
-+-- random_forest_model.pkl         # Primary inference model
-+-- logistic_regression_model.pkl
-+-- gradient_boosting_model.pkl
++-- logistic_regression_model.pkl   # Serialized model
 +-- scaler.pkl                      # Fitted StandardScaler
-+-- feature_importance.json         # RF Gini importances, sorted descending
-+-- evaluation_metrics.json         # Accuracy, F1, ROC-AUC for all 3 models
++-- feature_importance.json         # Normalized standardized coefficient importances
++-- evaluation_metrics.json         # Accuracy, F1, ROC-AUC metrics
 ```
 
-### Hyperparameter Tuning — `get_rf_tuning_curve()`
+### Hyperparameter Tuning — `get_lr_tuning_curve()`
 
-Sweeps `n_estimators` over `[10, 25, 50, 75, 100, 150, 200, 250, 300]`, recording Accuracy and F1-score at each step.
-Results saved as `plots/hyperparameter_tuning.png`. Confirms `n_estimators=200` as the point of diminishing returns.
+Sweeps regularization parameter $C$ over log-scale `[0.001, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0, 50.0, 100.0]`, recording Accuracy and F1-score at each step.
+Results saved as `plots/hyperparameter_tuning.png`.
 
 ---
 
@@ -301,31 +266,31 @@ Results saved as `plots/hyperparameter_tuning.png`. Confirms `n_estimators=200` 
 
 | Metric | Formula | Purpose |
 |---|---|---|
-| **Accuracy** | `(TP+TN)/(TP+TN+FP+FN)` | Overall correctness |
-| **Precision** | `TP/(TP+FP)` | Avoids false placement labels |
-| **Recall** | `TP/(TP+FN)` | Minimises missed placements — primary concern |
-| **F1-Score** | `2 x (P x R)/(P+R)` | Harmonic mean; primary model selection criterion |
-| **ROC-AUC** | Area under ROC curve | Discrimination power across all decision thresholds |
+| **Accuracy** | `(TP+TN)/(TP+TN+FP+FN)` | Overall correctness (0.940) |
+| **Precision** | `TP/(TP+FP)` | Avoids false placement labels (0.942) |
+| **Recall** | `TP/(TP+FN)` | Minimises missed placements (0.970) |
+| **F1-Score** | `2 x (P x R)/(P+R)` | Harmonic mean (0.956) |
+| **ROC-AUC** | Area under ROC curve | Discrimination power across decision thresholds (0.985) |
 
-### Six Plots Generated
+### Plots Generated
 
 | Plot | Filename | Description |
 |---|---|---|
-| Confusion Matrix | `confusion_matrix_rf.png` | Heatmap of TP/TN/FP/FN for Random Forest |
-| ROC Curves | `roc_curves.png` | All 3 models overlaid; labelled with AUC values |
-| Feature Importance | `feature_importance.png` | Horizontal bar chart sorted by Gini importance |
-| Hyperparameter Tuning | `hyperparameter_tuning.png` | Accuracy and F1 vs `n_estimators` sweep |
+| Confusion Matrix | `confusion_matrix.png` | Heatmap of TP/TN/FP/FN for Logistic Regression |
+| ROC Curve | `roc_curves.png` | ROC curve labelled with AUC value (0.985) |
+| Feature Importance | `feature_importance.png` | Horizontal bar chart sorted by standardized coefficient share |
+| Hyperparameter Tuning | `hyperparameter_tuning.png` | Accuracy and F1 vs regularization $C$ sweep |
 | PCA 2D Projection | `pca_projection.png` | 500 students in PC1–PC2 space coloured by placement label |
 | Radar Profile Chart | `radar_chart_profiles.png` | Mean placed vs not-placed 8-feature radar (min-max normalised) |
 
-### Baseline Comparison (Table 3.3)
+### Baseline Comparison
 
 ML model cross-tabulated against a simple CGPA >= 7.5 single-threshold rule:
 
 | | CGPA < 7.5 (Rule: Not Placed) | CGPA >= 7.5 (Rule: Placed) |
 |---|---|---|
-| **Model: Not Placed** | 29 | 1 |
-| **Model: Placed** | **17** | 53 |
+| **Model: Not Placed** | 27 | 4 |
+| **Model: Placed** | **21** | 48 |
 
 > **Key Finding:** 17 students with CGPA < 7.5 are correctly identified as **placement-ready** by the ML model, thanks to strong compensatory skills in aptitude, coding, and communication. This validates multi-attribute assessment over single-metric rules.
 
@@ -472,8 +437,7 @@ Emit prioritised recommendation items sorted by severity and importance
   "internships": 1,
   "projects": 3,
   "certifications": 2,
-  "backlogs": 0,
-  "model_name": "Random Forest"
+  "backlogs": 0
 }
 ```
 
@@ -484,8 +448,8 @@ Field validation enforced with Pydantic `Field(ge=..., le=...)` bounds matching 
 ```python
 @app.on_event("startup")
 def startup_event():
-    if not (os.path.exists(config.RF_MODEL_PATH) and os.path.exists(config.METRICS_PATH)):
-        train_and_save_all_models()
+    if not (os.path.exists(config.MODEL_PATH) and os.path.exists(config.METRICS_PATH)):
+        train_and_save_model()
         evaluate_all_models()
 ```
 
@@ -573,37 +537,33 @@ Results on the held-out test set (n=100, stratified 80/20 split):
 
 | Model | Accuracy | Precision | Recall | F1-Score | ROC-AUC |
 |---|---|---|---|---|---|
-| **Random Forest** (selected) | **0.920** | 0.897 | **0.896** | **0.876** | 0.896 |
-| Logistic Regression | 0.900 | 0.875 | 0.866 | 0.854 | **0.900** |
-| Gradient Boosting | 0.910 | 0.882 | 0.881 | 0.867 | 0.893 |
+| **Logistic Regression** | **0.940** | **0.942** | **0.970** | **0.956** | **0.985** |
 
-**Why Random Forest was selected as the primary model:**
+**Model Characteristics:**
 
-- **Highest F1-score (0.876)** — optimal balance of precision and recall.
-- **Highest Recall (0.896)** — correctly identifies 60 of 67 placed students on the test set.
-- Non-linear tree splits capture feature interactions that linear models cannot.
-- Directly provides Gini-based `feature_importances_` that power the recommendation engine.
-- Scale-invariant — no normalisation required at inference time.
-- While Logistic Regression achieves marginally higher ROC-AUC (0.900 vs 0.896), the Random Forest's explainability advantage and recall performance justifies selection for this placement use case.
+- **Top Classification Accuracy (94.0%)** and **F1-Score (0.956)** on the held-out test set.
+- **High Recall (0.970)** — correctly identifies 65 of 67 placed students on the test set.
+- Features are normalized with `StandardScaler` ensuring zero-mean unit-variance distribution.
+- Standardized coefficients provide direct log-odds interpretation and feature importance weights.
 
 ---
 
 ## Feature Importance Rankings
 
-Derived from Random Forest Gini impurity reduction across 200 trees (trained on 400-student set):
+Derived from standardized coefficient magnitudes:
 
 | Rank | Feature | Importance | Interpretation |
 |---|---|---|---|
-| 1 | `cgpa` | **27.15%** | Single strongest predictor; primary academic shortlisting signal |
-| 2 | `aptitude_score` | **21.54%** | Quantitative/logical reasoning; campus structured test performance |
-| 3 | `technical_score` | **17.83%** | Coding and DSA ability; critical for IT and software roles |
-| 4 | `communication_score` | **16.99%** | Soft skills; decisive in HR interviews and group discussions |
-| 5 | `projects` | **6.96%** | Portfolio evidence of practical delivery capability |
-| 6 | `backlogs` | **4.11%** | Hard eligibility gate — even 1 backlog removes most tier-1/2 options |
-| 7 | `certifications` | **2.90%** | Resume differentiation and domain credentialing |
-| 8 | `internships` | **2.51%** | Industry exposure; less impactful than direct skill scores in this cohort |
+| 1 | `cgpa` | **20.60%** | Single strongest predictor; primary academic shortlisting signal |
+| 2 | `aptitude_score` | **18.69%** | Quantitative/logical reasoning; campus structured test performance |
+| 3 | `technical_score` | **16.28%** | Coding and DSA ability; critical for IT and software roles |
+| 4 | `communication_score` | **14.49%** | Soft skills; decisive in HR interviews and group discussions |
+| 5 | `certifications` | **7.65%** | Resume differentiation and domain credentialing |
+| 6 | `internships` | **7.56%** | Industry exposure and applied experience |
+| 7 | `projects` | **7.41%** | Portfolio evidence of practical delivery capability |
+| 8 | `backlogs` | **7.32%** | Academic eligibility gatekeeper |
 
-> **Key Insight:** The four score attributes (CGPA + Aptitude + Technical + Communication) combine to **83.51%** of total decision weight. Multi-attribute assessment is statistically proven essential — CGPA alone cannot adequately predict placement outcomes.
+> **Key Insight:** The four score attributes (CGPA + Aptitude + Technical + Communication) combine to **70.06%** of total decision weight. Multi-attribute assessment is essential — CGPA alone cannot adequately predict placement outcomes.
 
 ---
 

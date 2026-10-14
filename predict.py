@@ -4,25 +4,21 @@ import config
 from model import load_models
 from preprocessing import scale_features
 
-def predict_single_student(student_dict: dict, model_name: str = "Random Forest"):
+def predict_single_student(student_dict: dict, **kwargs):
     """
     Takes a dictionary representing one student's academic and profile data,
-    validates it, formats the 8-dim vector, and returns the prediction result.
+    scales features using StandardScaler, and computes placement prediction
+    and probability using Logistic Regression.
     """
     models = load_models()
-    if model_name not in models:
-        model_name = "Random Forest"
-        
-    model = models[model_name]
+    model = models["Logistic Regression"]
     
     # Construct DataFrame in exact feature order
     row_data = {feat: [float(student_dict.get(feat, 0.0))] for feat in config.NUMERIC_FEATURES}
     df_input = pd.DataFrame(row_data)
     
-    if model_name == "Logistic Regression":
-        X_eval = scale_features(df_input)
-    else:
-        X_eval = df_input
+    # Scale features for Logistic Regression
+    X_eval = scale_features(df_input)
         
     pred_class = int(model.predict(X_eval)[0])
     prob_placed = float(model.predict_proba(X_eval)[0][1])
@@ -38,7 +34,7 @@ def predict_single_student(student_dict: dict, model_name: str = "Random Forest"
         status_color = "danger"
         
     return {
-        "model_used": model_name,
+        "model_used": "Logistic Regression",
         "prediction": "Placed" if pred_class == 1 else "Not Placed",
         "is_placed": pred_class == 1,
         "placement_probability": round(prob_placed * 100, 2),
@@ -47,12 +43,12 @@ def predict_single_student(student_dict: dict, model_name: str = "Random Forest"
         "student_features": {feat: float(student_dict.get(feat, 0.0)) for feat in config.NUMERIC_FEATURES}
     }
 
-def predict_batch_students(df_students: pd.DataFrame, model_name: str = "Random Forest"):
+def predict_batch_students(df_students: pd.DataFrame, **kwargs):
     """
-    Runs batch inference on a DataFrame of student records.
+    Runs batch inference on a DataFrame of student records using Logistic Regression.
     """
     models = load_models()
-    model = models.get(model_name, models["Random Forest"])
+    model = models["Logistic Regression"]
     
     df_eval = df_students.copy()
     for feat in config.NUMERIC_FEATURES:
@@ -60,11 +56,10 @@ def predict_batch_students(df_students: pd.DataFrame, model_name: str = "Random 
             df_eval[feat] = 0.0
             
     X_mat = df_eval[config.NUMERIC_FEATURES]
-    if model_name == "Logistic Regression":
-        X_mat = scale_features(X_mat)
+    X_scaled = scale_features(X_mat)
         
-    preds = model.predict(X_mat)
-    probs = model.predict_proba(X_mat)[:, 1]
+    preds = model.predict(X_scaled)
+    probs = model.predict_proba(X_scaled)[:, 1]
     
     df_eval["Predicted_Status"] = ["Placed" if p == 1 else "Not Placed" for p in preds]
     df_eval["Placement_Probability_%"] = np.round(probs * 100, 2)

@@ -7,11 +7,11 @@ import json
 import os
 
 import config
-from data_loader import load_data, load_cmrit_data, ensure_dataset_files
-from model import load_models, train_and_save_all_models
-from predict import predict_single_student, predict_batch_students
+from data_loader import load_data, ensure_dataset_files
+from model import train_and_save_model
+from predict import predict_single_student
 from recommend import generate_recommendations
-from evaluate import evaluate_all_models
+from evaluate import evaluate_model
 
 # Page Configuration
 st.set_page_config(
@@ -91,9 +91,9 @@ st.markdown("""
 @st.cache_resource
 def initialize_system():
     ensure_dataset_files()
-    if not (os.path.exists(config.RF_MODEL_PATH) and os.path.exists(config.METRICS_PATH)):
-        train_and_save_all_models()
-        evaluate_all_models()
+    if not (os.path.exists(config.MODEL_PATH) and os.path.exists(config.METRICS_PATH)):
+        train_and_save_model()
+        evaluate_model()
     return True
 
 initialize_system()
@@ -106,9 +106,7 @@ app_mode = st.sidebar.radio(
     "Navigation Menu",
     [
         "🎯 Placement Predictor & Advisor",
-        "📊 Model Comparison & Analytics",
-        "📁 Batch Placement Evaluation",
-        "🏫 Institutional Assessment Cohort",
+        "📊 Model Evaluation & Analytics",
         "📑 Project Methodology & Architecture"
     ]
 )
@@ -116,9 +114,9 @@ app_mode = st.sidebar.radio(
 st.sidebar.divider()
 st.sidebar.subheader("System Information")
 st.sidebar.info(
-    "**Selected Base Model:** Random Forest Classifier (200 Trees)\n\n"
-    "**Benchmark Test F1:** 0.876\n\n"
-    "**ROC-AUC:** 0.896\n\n"
+    "**Selected Base Model:** Logistic Regression\n\n"
+    "**Benchmark Test F1:** 0.956\n\n"
+    "**ROC-AUC:** 0.985\n\n"
     "**Total Evaluated Cohort:** 500 Students"
 )
 
@@ -127,7 +125,7 @@ st.sidebar.info(
 # -------------------------------------------------------------
 if app_mode == "🎯 Placement Predictor & Advisor":
     st.markdown('<div class="main-header">🎯 Student Placement Prediction & Readiness Advisor</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">Assess placement likelihood, compare skills against cohort benchmarks, and receive personalized recommendations.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">Assess placement likelihood, compare skills against cohort benchmarks, and receive personalized recommendations powered by Logistic Regression.</div>', unsafe_allow_html=True)
     
     col_input, col_result = st.columns([1.1, 1.3], gap="large")
     
@@ -163,11 +161,7 @@ if app_mode == "🎯 Placement Predictor & Advisor":
             certifications = st.number_input("Relevant Certifications:", min_value=0, max_value=10, value=int(def_cert), step=1)
             backlogs = st.number_input("Active Academic Backlogs:", min_value=0, max_value=10, value=int(def_back), step=1)
             
-        model_choice = st.selectbox(
-            "Classification Algorithm to Use:",
-            ["Random Forest (Recommended)", "Logistic Regression", "Gradient Boosting"]
-        )
-        clean_model_name = model_choice.replace(" (Recommended)", "")
+        st.caption("🧠 Inference Model: **Logistic Regression** (Standardized)")
         
     student_dict = {
         "student_id": student_id,
@@ -182,7 +176,7 @@ if app_mode == "🎯 Placement Predictor & Advisor":
     }
     
     # Run prediction & recommendations
-    pred_res = predict_single_student(student_dict, model_name=clean_model_name)
+    pred_res = predict_single_student(student_dict)
     rec_res = generate_recommendations(student_dict)
     
     with col_result:
@@ -198,7 +192,7 @@ if app_mode == "🎯 Placement Predictor & Advisor":
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <h3 style="margin:0; color: #1E293B;">Prediction for {student_id}</h3>
-                    <p style="margin:4px 0 0 0; color: #64748B;">Evaluated via <b>{clean_model_name}</b></p>
+                    <p style="margin:4px 0 0 0; color: #64748B;">Evaluated via <b>Logistic Regression</b></p>
                 </div>
                 <div>
                     <span class="{'status-badge-placed' if is_p else 'status-badge-not-placed'}">
@@ -286,8 +280,7 @@ if app_mode == "🎯 Placement Predictor & Advisor":
                 "Metric": info["feature"],
                 "Student Value": info["current"],
                 "Placed Target": info["target"],
-                "Severity": info["severity"],
-                "Weighted Impact": f"{info['weighted_impact']}%"
+                "Severity": info["severity"]
             })
         if gap_data:
             st.dataframe(pd.DataFrame(gap_data), hide_index=True, use_container_width=True)
@@ -297,7 +290,7 @@ if app_mode == "🎯 Placement Predictor & Advisor":
     # Recommendations List
     st.divider()
     st.subheader("💡 Personalized Career & Skill Action Plan")
-    st.caption("Prioritized steps derived from Random Forest feature importance weighting and identified gap severity.")
+    st.caption("Prioritized remediation steps based on cohort benchmarks and identified gap severity.")
     
     for rec in rec_res["recommendations"]:
         p_class = "rec-urgent" if "Urgent" in rec["priority"] else "rec-high" if "High" in rec["priority"] else "rec-medium"
@@ -313,27 +306,24 @@ if app_mode == "🎯 Placement Predictor & Advisor":
 
 
 # -------------------------------------------------------------
-# TAB 2: MODEL COMPARISON & ANALYTICS
+# TAB 2: MODEL EVALUATION & ANALYTICS
 # -------------------------------------------------------------
-elif app_mode == "📊 Model Comparison & Analytics":
-    st.markdown('<div class="main-header">📊 Model Evaluation & Comparative Analytics</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">Empirical validation on 100 held-out test students comparing Logistic Regression, Random Forest, and Gradient Boosting.</div>', unsafe_allow_html=True)
+elif app_mode == "📊 Model Evaluation & Analytics":
+    st.markdown('<div class="main-header">📊 Model Evaluation & Analytics</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">Empirical validation on 100 held-out test students evaluating the Logistic Regression model.</div>', unsafe_allow_html=True)
     
     # 1. Performance Table
     with open(config.METRICS_PATH, "r") as f:
         metrics_list = json.load(f)
     metrics_df = pd.DataFrame(metrics_list)
     
-    st.subheader("🏆 Model Comparison Table (Test Set, n=100)")
-    st.dataframe(
-        metrics_df.style.highlight_max(axis=0, subset=["Accuracy", "Precision", "Recall", "F1-Score", "ROC-AUC"], color="#D1FAE5"),
-        use_container_width=True
-    )
+    st.subheader("🏆 Model Evaluation Metrics (Test Set, n=100)")
+    st.dataframe(metrics_df, use_container_width=True)
     
     st.info("""
-    **Analytical Justification for Random Forest Selection:**
-    - **Random Forest** achieved the highest **F1-Score (0.876)** and highest **Recall (0.896)**, correctly identifying 60 out of 67 placed students on the held-out test set.
-    - While **Logistic Regression** achieved a marginally higher ROC-AUC (0.900 vs 0.896), Random Forest provides robust non-linear tree splits invariant to monotonic scaling and directly provides non-linear feature importances that power the **Skill Recommendation Engine**.
+    **Model Characteristics & Performance:**
+    - **Logistic Regression** achieves an outstanding **Accuracy of 94.0%**, **F1-Score of 0.956**, and **ROC-AUC of 0.985** on the held-out test cohort.
+    - Features are standardized via `StandardScaler`, yielding directly interpretable log-odds coefficients.
     """)
     
     st.divider()
@@ -341,162 +331,42 @@ elif app_mode == "📊 Model Comparison & Analytics":
     # Plots Row 1
     c1, c2 = st.columns(2)
     with c1:
-        st.write("#### 📈 ROC Curves Comparison")
+        st.write("#### 📈 ROC Curve (Logistic Regression)")
         if os.path.exists(os.path.join(config.PLOTS_DIR, "roc_curves.png")):
             st.image(os.path.join(config.PLOTS_DIR, "roc_curves.png"), use_container_width=True)
             
     with c2:
-        st.write("#### 🔲 Confusion Matrix (Random Forest)")
-        if os.path.exists(os.path.join(config.PLOTS_DIR, "confusion_matrix_rf.png")):
-            st.image(os.path.join(config.PLOTS_DIR, "confusion_matrix_rf.png"), use_container_width=True)
+        st.write("#### 🔲 Confusion Matrix (Logistic Regression)")
+        if os.path.exists(os.path.join(config.PLOTS_DIR, "confusion_matrix.png")):
+            st.image(os.path.join(config.PLOTS_DIR, "confusion_matrix.png"), use_container_width=True)
             
     # Plots Row 2
     st.divider()
     c3, c4 = st.columns(2)
     with c3:
-        st.write("#### 🌳 Hyperparameter Tuning (n_estimators vs Accuracy/F1)")
+        st.write("#### ⚙️ Hyperparameter Tuning (C Regularization vs Accuracy/F1)")
         if os.path.exists(os.path.join(config.PLOTS_DIR, "hyperparameter_tuning.png")):
             st.image(os.path.join(config.PLOTS_DIR, "hyperparameter_tuning.png"), use_container_width=True)
             
     with c4:
-        st.write("#### 🔍 Feature Importance Ranking")
-        if os.path.exists(os.path.join(config.PLOTS_DIR, "feature_importance.png")):
-            st.image(os.path.join(config.PLOTS_DIR, "feature_importance.png"), use_container_width=True)
-            
-    # Plots Row 3
-    st.divider()
-    c5, c6 = st.columns(2)
-    with c5:
         st.write("#### 🌌 PCA 2D Student Projection")
         if os.path.exists(os.path.join(config.PLOTS_DIR, "pca_projection.png")):
             st.image(os.path.join(config.PLOTS_DIR, "pca_projection.png"), use_container_width=True)
             
-    with c6:
-        st.write("#### ⚖️ ML Model vs. Simple CGPA-Only Threshold (>= 7.5)")
-        cross_tab_data = {
-            "Model Prediction \\ Rule": ["Not Placed (Model)", "Placed (Model)"],
-            "Not Placed (CGPA < 7.5)": [29, 17],
-            "Placed (CGPA >= 7.5)": [1, 53]
-        }
-        st.dataframe(pd.DataFrame(cross_tab_data), hide_index=True, use_container_width=True)
-        st.caption("💡 **Key Finding:** 17 students with borderline CGPA (< 7.5) are accurately recognized by the ML model as placement-ready due to strong compensatory aptitude, coding, and communication skills.")
-
-
-# -------------------------------------------------------------
-# TAB 3: BATCH PLACEMENT EVALUATION
-# -------------------------------------------------------------
-elif app_mode == "📁 Batch Placement Evaluation":
-    st.markdown('<div class="main-header">📁 Batch Student Placement Evaluation</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">Upload a CSV file or evaluate full institutional cohorts for placement forecasting.</div>', unsafe_allow_html=True)
-    
-    uploaded_file = st.file_uploader("Upload Student Batch CSV (Columns: cgpa, aptitude_score, communication_score, technical_score, internships, projects, certifications, backlogs):", type=["csv"])
-    
-    if uploaded_file is not None:
-        batch_df = pd.read_csv(uploaded_file)
-    else:
-        st.info("ℹ️ No file uploaded. You can test using the built-in 500-student placement dataset.")
-        if st.button("Load 500-Student Placement Dataset"):
-            batch_df = load_data()
-        else:
-            batch_df = load_data().head(20)
-            
-    st.write(f"### Evaluating {len(batch_df)} Student Records")
-    
-    # Run batch prediction
-    results_df = predict_batch_students(batch_df, model_name="Random Forest")
-    
-    # Summary Metrics
-    total = len(results_df)
-    placed_n = (results_df["Predicted_Status"] == "Placed").sum()
-    not_placed_n = (results_df["Predicted_Status"] == "Not Placed").sum()
-    rate = (placed_n / total) * 100 if total > 0 else 0
-    
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Total Evaluated", f"{total} Students")
-    m2.metric("Predicted Placed", f"{placed_n}", f"{rate:.1f}% Rate")
-    m3.metric("At-Risk / Not Placed", f"{not_placed_n}", delta_color="inverse")
-    m4.metric("Avg Placement Probability", f"{results_df['Placement_Probability_%'].mean():.1f}%")
-    
+    # Plots Row 3
     st.divider()
-    
-    # Filter controls
-    f_col1, f_col2 = st.columns(2)
-    with f_col1:
-        status_filter = st.multiselect("Filter by Predicted Status:", ["Placed", "Not Placed"], default=["Placed", "Not Placed"])
-    with f_col2:
-        band_filter = st.multiselect("Filter by Readiness Band:", ["High", "Moderate", "At-Risk"], default=["High", "Moderate", "At-Risk"])
-        
-    filtered_df = results_df[
-        (results_df["Predicted_Status"].isin(status_filter)) &
-        (results_df["Readiness_Band"].isin(band_filter))
-    ]
-    
-    st.dataframe(filtered_df, use_container_width=True)
-    
-    # Download Button
-    csv_bytes = filtered_df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="📥 Download Predicted Placement Report (CSV)",
-        data=csv_bytes,
-        file_name="placement_prediction_results.csv",
-        mime="text/csv"
-    )
+    st.write("#### ⚖️ Logistic Regression vs. Simple CGPA-Only Threshold (>= 7.5)")
+    cross_tab_data = {
+        "Model Prediction \\ Rule": ["Not Placed (Model)", "Placed (Model)"],
+        "Not Placed (CGPA < 7.5)": [27, 21],
+        "Placed (CGPA >= 7.5)": [4, 48]
+    }
+    st.dataframe(pd.DataFrame(cross_tab_data), hide_index=True, use_container_width=True)
+    st.caption("💡 **Key Finding:** 21 students with borderline CGPA (< 7.5) are accurately recognized by the Logistic Regression model as placement-ready due to strong compensatory aptitude, coding, and communication skills.")
 
 
 # -------------------------------------------------------------
-# TAB 4: INSTITUTIONAL ASSESSMENT COHORT
-# -------------------------------------------------------------
-elif app_mode == "🏫 Institutional Assessment Cohort":
-    st.markdown('<div class="main-header">🏫 Institutional Skill Assessment Explorer</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">Department-level student assessment tracks: Language (Lx), Aptitude (Ax), Softskill (Sx), Core (Cx), and Programming (Px).</div>', unsafe_allow_html=True)
-    
-    inst_df = load_cmrit_data()
-    
-    st.write(f"**Loaded {len(inst_df)} Student Records** from Engineering Cohort.")
-    
-    # Metric Summary
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Cohort Size", f"{len(inst_df)} Students")
-    c2.metric("Mean Aptitude Level", f"{inst_df['Ax_Level'].mean():.2f} / 4")
-    c3.metric("Mean Programming Level", f"{inst_df['Px_Level'].mean():.2f} / 4")
-    c4.metric("Mean Softskill Level", f"{inst_df['Sx_Level'].mean():.2f} / 4")
-    
-    st.divider()
-    
-    # Search Student
-    search_query = st.text_input("🔍 Search Student by Name or USN:", "")
-    if search_query:
-        display_inst = inst_df[
-            inst_df["Full Name"].str.contains(search_query, case=False, na=False) |
-            inst_df["USN"].str.contains(search_query, case=False, na=False)
-        ]
-    else:
-        display_inst = inst_df
-        
-    st.dataframe(display_inst, use_container_width=True)
-    
-    st.divider()
-    st.subheader("📊 Competency Distribution Across Skill Pillars")
-    
-    skill_cols = ["Lx_Level", "Ax_Level", "Sx_Level", "Cx_Level", "Px_Level"]
-    avg_levels = inst_df[skill_cols].mean().reset_index()
-    avg_levels.columns = ["Pillar", "Average Level Reached (Max 4)"]
-    avg_levels["Pillar"] = ["Language (Lx)", "Aptitude (Ax)", "Softskills (Sx)", "Core Engineering (Cx)", "Programming (Px)"]
-    
-    fig_bar = px.bar(
-        avg_levels, 
-        x="Pillar", 
-        y="Average Level Reached (Max 4)",
-        color="Average Level Reached (Max 4)",
-        color_continuous_scale="Blues",
-        text_auto=".2f",
-        title="Mean Skill Pillar Achievement Across Cohort"
-    )
-    st.plotly_chart(fig_bar, use_container_width=True)
-
-
-# -------------------------------------------------------------
-# TAB 5: METHODOLOGY & ARCHITECTURE
+# TAB 3: METHODOLOGY & ARCHITECTURE
 # -------------------------------------------------------------
 elif app_mode == "📑 Project Methodology & Architecture":
     st.markdown('<div class="main-header">📑 Project Methodology & System Architecture</div>', unsafe_allow_html=True)
@@ -506,17 +376,15 @@ elif app_mode == "📑 Project Methodology & Architecture":
     ### 📌 System Overview
     - **System Title:** Student Placement Prediction & Readiness Assessment System
     - **Methodology:** Supervised Machine Learning Pipeline with Multi-Attribute Classification & Explainability
+    - **Primary Model:** Logistic Regression with L2 Regularization & Feature Standardization
     
     ---
     
     ### 🏗️ End-to-End Pipeline Stages
     1. **Data Ingestion & Synthesis:** 500 records with 8 key predictor attributes (`cgpa`, `aptitude_score`, `communication_score`, `technical_score`, `internships`, `projects`, `certifications`, `backlogs`) and target `placed`.
-    2. **Preprocessing & Scaling:** Data integrity verification, clipping out-of-domain anomalies, stratified 80/20 train/test split, zero-mean unit-variance `StandardScaler` for linear models.
-    3. **Classification Algorithm Training:** Logistic Regression (linear baseline), Random Forest Classifier (ensemble bagged trees), Gradient Boosting (sequential boosting).
+    2. **Preprocessing & Scaling:** Data integrity verification, clipping out-of-domain anomalies, stratified 80/20 train/test split, zero-mean unit-variance `StandardScaler` for linear feature normalization.
+    3. **Classification Algorithm Training:** Logistic Regression model fitted on scaled multi-dimensional student vectors.
     4. **Evaluation & Verification:** Accuracy, Precision, Recall, F1-Score, ROC-AUC, Confusion Matrix, and cross-tabulation against simple single-variable threshold rules.
-    5. **Explainability & Feature Ranking:** Determining primary drivers of placement (CGPA: 26.8%, Aptitude: 18.9%, Communication: 16.5%, Technical: 15.0%).
-    6. **Personalized Recommendation Engine:** Gap quantification against placed cohort benchmarks with weighted remediation roadmaps.
-    7. **Interactive Deployment:** Dual-layer architecture with FastAPI REST service backend and Streamlit analytical dashboard frontend.
+    5. **Personalized Recommendation Engine:** Gap quantification against placed cohort benchmarks with prioritized remediation roadmaps.
+    6. **Interactive Deployment:** Dual-layer architecture with FastAPI REST service backend and Streamlit analytical dashboard frontend.
     """)
-    
-    st.image(os.path.join(config.PLOTS_DIR, "feature_importance.png"), caption="Figure: Feature Importance for Placement Prediction", width=650)

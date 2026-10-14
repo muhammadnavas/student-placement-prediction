@@ -74,8 +74,6 @@ INSTITUTIONAL_RAW_DATA = """Sl.No,Email,Full Name,USN,Phone,BRANCH,Section,L1,L2
 67,student67@college.edu,Student 67,USN23AI067,9876543267,CSE(AIML),A,94,92,82,72,56,56,55,66,78,72,87,74,18,17,62,90,74,100,0,0,100,65,70,70,96,65,84,0,4,4,4,4,4
 """
 
-CMRIT_RAW_DATA = INSTITUTIONAL_RAW_DATA
-
 def generate_placement_dataset(n_samples=500, random_seed=42):
     """
     Generates realistic synthetic placement dataset corresponding to the exact 

@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 import config
 
 def validate_and_clean_data(df: pd.DataFrame) -> pd.DataFrame:
@@ -33,16 +32,6 @@ def validate_and_clean_data(df: pd.DataFrame) -> pd.DataFrame:
     if "backlogs" in df.columns:
         df["backlogs"] = df["backlogs"].clip(lower=0).astype(int)
         
-    return df
-
-def calculate_derived_indices(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Calculates derived scores for deep student profile assessment.
-    """
-    df = df.copy()
-    df["skill_index"] = (df["aptitude_score"] + df["communication_score"] + df["technical_score"]) / 3.0
-    df["practical_exposure"] = (df["internships"] * 2.0) + (df["projects"] * 1.5) + (df["certifications"] * 1.0)
-    df["academic_stability"] = (df["cgpa"] * 10.0) - (df["backlogs"] * 12.5)
     return df
 
 def get_feature_matrix(df: pd.DataFrame, include_target: bool = True):

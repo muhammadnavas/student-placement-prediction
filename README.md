@@ -9,21 +9,19 @@ The system predicts student placement opportunities based on academic performanc
 ## 🌟 Key Features
 
 1. **Supervised ML Classification Pipeline**:
-   - **Logistic Regression**: Linear baseline with direct odds-ratio interpretation.
-   - **Random Forest Classifier (200 Trees)**: Robust non-linear bagged ensemble achieving top F1-Score (0.876) and Recall (0.896).
-   - **Gradient Boosting Classifier**: Sequential error-correcting boosted trees.
+   - **Logistic Regression**: High-performance linear classifier with standardized feature preprocessing (`StandardScaler`), achieving 94.0% accuracy, 0.956 F1-Score, and 0.985 ROC-AUC.
 2. **Feature Importance & Multi-Attribute Insights**:
-   - Demonstrates that **CGPA contributes only ~26.8%**, while **Aptitude, Communication, and Technical skills together contribute >50%**.
+   - Demonstrates that academic performance and skill attributes (Aptitude, Technical, and Communication) collectively determine placement propensity.
    - Captures compensating strengths for borderline students that simple CGPA cut-offs miss.
 3. **Personalized Skill Recommendation Engine**:
    - Conducts individual gap analysis against placed cohort benchmarks.
-   - Employs Random Forest feature importance weights to generate prioritized, actionable remediation plans.
+   - Employs Logistic Regression standardized coefficient weights to generate prioritized, actionable remediation plans.
 4. **FastAPI Backend (`api.py`)**:
    - REST API endpoints for single prediction, batch prediction, gap analysis, metrics, and cohort benchmarks.
    - Interactive Swagger API documentation at `http://127.0.0.1:8000/docs`.
 5. **Streamlit Modern Web Dashboard (`app.py`)**:
    - **🎯 Placement Predictor & Advisor**: Real-time sliders, gauge indicators, interactive 360° competency radar chart vs cohort mean, and prioritized action plan.
-   - **📊 Model Comparison & Analytics**: ROC curves, Confusion Matrix, Hyperparameter tuning curves, PCA 2D clustering, and CGPA threshold cross-tabulation.
+   - **📊 Model Evaluation & Analytics**: ROC curves, Confusion Matrix, Hyperparameter tuning curves, PCA 2D clustering, and CGPA threshold cross-tabulation.
    - **📁 Batch Placement Evaluation**: CSV file upload and bulk scoring with downloadable reports.
    - **🏫 Institutional Assessment Cohort**: Exploration of the institutional assessment cohort across Language ($L_x$), Aptitude ($A_x$), Softskills ($S_x$), Core ($C_x$), and Programming ($P_x$) skill pillars.
    - **📑 Project Methodology & Architecture**: Complete project documentation and pipeline specifications.
@@ -49,14 +47,12 @@ ML2 - Project/
 │   ├── student_placement_data.csv
 │   └── institutional_assessment_data.csv
 ├── models/
-│   ├── random_forest_model.pkl
 │   ├── logistic_regression_model.pkl
-│   ├── gradient_boosting_model.pkl
 │   ├── scaler.pkl
 │   ├── evaluation_metrics.json
 │   └── feature_importance.json
 └── plots/
-    ├── confusion_matrix_rf.png
+    ├── confusion_matrix.png
     ├── feature_importance.png
     ├── hyperparameter_tuning.png
     ├── pca_projection.png
